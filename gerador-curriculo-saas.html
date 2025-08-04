@@ -1,11 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Currículo SaaS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Adiciona a biblioteca do Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2d89ef;
+            --secondary-color: #f5f5f5;
+            --text-color: #222;
+            --background-color: #fff;
+        }
+        body {
+            background: var(--background-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background: var(--primary-color);
+            color: #fff;
+            padding: 2rem 1rem 1rem 1rem;
+            text-align: center;
+        }
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            background: var(--secondary-color);
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 2rem;
+        }
+        .section { margin-bottom: 2rem; }
+        .section-title {
+            font-size: 1.3rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 0.3rem;
+        }
+        label { display: block; margin-bottom: 0.3rem; font-weight: 500; }
+        input, textarea, select {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .btn {
+            background: var(--primary-color);
+            color: #fff;
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-right: 0.5rem;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #1b5fa7; }
+        .btn-premium { background: #f97316; }
+        .btn-premium:hover { background: #fb923c; }
+
+        /* Estilos do Modal de Pagamento */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0,0,0,0.7);
+            backdrop-filter: blur(5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        .modal-content h2 { color: var(--primary-color); }
+        .modal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+        #qrcode {
+            display: flex;
+            justify-content: center;
+            margin: 1rem 0;
+            padding: 10px;
+            background: white;
+            border: 1px solid #ccc;
+        }
+
+        @media print {
+            body, .container { background: #fff !important; color: #000 !important; box-shadow: none !important; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header no-print">
+        <h1>Gerador de Currículo Premium</h1>
+        <p>Monte seu currículo profissional e baixe em PDF.</p>
+    </div>
+
+    <div class="container">
+        <form id="cvForm" autocomplete="off">
+            <div class="section">
+                <div class="section-title">Informações Pessoais</div>                
+                <input type="text" id="nome" name="nome" placeholder="Nome Completo" required>
+                <input type="email" id="email" name="email" placeholder="E-mail" required>
+                <input type="text" id="telefone" name="telefone" placeholder="Telefone" required>
+                <input type="text" id="endereco" name="endereco" placeholder="Endereço (Ex: Cidade, Estado)">
+                <input type="text" id="linkedin" name="linkedin" placeholder="URL do seu Perfil no LinkedIn">
+            </div>
+            <div class="section">
+                <div class="section-title">Resumo Profissional</div>
+                <textarea id="resumo" name="resumo" rows="3" placeholder="Descreva brevemente seu perfil e objetivos"></textarea>
+            </div>
+            <div class="section" id="experiencias-section">
+                <div class="section-title">Experiências Profissionais</div>
+                <div id="experiencias"></div>
+                <button type="button" class="btn no-print" onclick="addExperiencia()">Adicionar Experiência</button>
+            </div>
+            <div class="section" id="formacoes-section">
+                <div class="section-title">Formação Acadêmica</div>
+                <div id="formacoes"></div>
+                <button type="button" class="btn no-print" onclick="addFormacao()">Adicionar Formação</button>
+            </div>
+             <div class="section" id="habilidades-section">
+                <div class="section-title">Habilidades</div>
+                <input type="text" id="habilidadeInput" placeholder="Digite uma habilidade e pressione Enter">
+                <div id="habilidades" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+            </div>
+            
+            <div class="section no-print" style="text-align: right;">
+                <button type="button" class="btn" style="background-color: #4a5568;" onclick="saveDataToSupabase()">Salvar Progresso</button>
+                <button type="button" class="btn" style="background-color: #c53030;" onclick="clearData()">Limpar Dados</button>
+                <button type="button" class="btn" onclick="gerarCurriculo()">Visualizar Currículo</button>                
+                <button type="button" class="btn btn-premium" onclick="iniciarProcessoDownload()">Baixar PDF (R$ 3,00)</button>
+            </div>
+        </form>
+
+        <div id="cvPreviewContainer" style="display:none; margin-top:2rem; border: 1px solid #ddd;">
+            <div id="cvPreview"></div>
+        </div>
+    </div>
+
+    <!-- Modal de Pagamento -->
     <div id="payment-modal" class="modal-overlay">
         <div class="modal-content">
             <button class="modal-close-btn" onclick="closeModal()">&times;</button>
-            <h2>Download Premium (R$ 1,99)</h2>
-            <p>Para baixar seu currículo, faça o pagamento via PIX usando os dados abaixo.</p>
+            <h2>Download Premium (R$ 3,00)</h2>
+            <p>Para baixar seu currículo, faça o pagamento via PIX.</p>
             
             <div id="payment-details">
-                 <div id="qrcode" style="display: flex; justify-content: center; margin: 1rem 0; padding: 10px; background: white; border: 1px solid #ccc;"></div>
+                 <div id="qrcode"></div>
                  <textarea id="pix-copia-e-cola" rows="4" readonly onclick="this.select(); document.execCommand('copy'); alert('Código PIX copiado!');"></textarea>
              </div>
     
@@ -16,12 +183,156 @@
         </div>
     </div>
 
-        // --- LÓGICA DE PAGAMENTO E DOWNLOAD (Baseado em index.html) ---
+    <script>
+        // --- CONFIGURAÇÃO DO SUPABASE ---
+        // Cole a URL e a Chave Anon do seu projeto Supabase aqui
+        const SUPABASE_URL = 'https://gqfwcffrseybhnlmrxbw.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZndjZmZyc2V5YmhubG1yeGJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4OTY0NDQsImV4cCI6MjA2ODQ3MjQ0NH0.dlo97Db5CdkIwprQbrjti_ExLIJod3siH5IrE5IRxjs';
 
-        let paymentCheckInterval = null; // Variável para controlar a verificação
+        // Cria o cliente Supabase
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+
+        // --- ESTADO DA APLICAÇÃO ---
+        let experiencias = [];
+        let formacoes = [];
+        let habilidades = [];
+
+        // --- FUNÇÕES DO GERADOR DE CURRÍCULO ---
+
+        function addExperiencia() {
+            experiencias.push({ empresa: '', cargo: '', inicio: '', fim: '', descricao: '' });
+            renderExperiencias();
+        }
+        function removeExperiencia(idx) {
+            experiencias.splice(idx, 1);
+            renderExperiencias();
+        }
+        function renderExperiencias() {
+            const container = document.getElementById('experiencias');
+            container.innerHTML = experiencias.map((exp, idx) => `
+                <div style="border:1px solid #ccc; border-radius:6px; padding:1rem; margin-bottom:1rem; background:#fff;">
+                    <input type="text" placeholder="Empresa" value="${exp.empresa}" oninput="experiencias[${idx}].empresa=this.value">
+                    <input type="text" placeholder="Cargo" value="${exp.cargo}" oninput="experiencias[${idx}].cargo=this.value">
+                    <div style="display:flex; gap:1rem;">
+                        <input type="text" placeholder="Mês/Ano Início (Ex: 01/2020)" value="${exp.inicio}" oninput="experiencias[${idx}].inicio=this.value">
+                        <input type="text" placeholder="Mês/Ano Fim (ou 'Atual')" value="${exp.fim}" oninput="experiencias[${idx}].fim=this.value">
+                    </div>
+                    <textarea rows="2" placeholder="Descrição das suas atividades" oninput="experiencias[${idx}].descricao=this.value">${exp.descricao}</textarea>
+                    <button type="button" class="btn no-print" style="background:#e53935;" onclick="removeExperiencia(${idx})">Remover</button>
+                </div>`).join('');
+        }
+
+        function addFormacao() {
+            formacoes.push({ instituicao: '', curso: '', inicio: '', fim: '' });
+            renderFormacoes();
+        }
+        function removeFormacao(idx) {
+            formacoes.splice(idx, 1);
+            renderFormacoes();
+        }
+        function renderFormacoes() {
+            const container = document.getElementById('formacoes');
+            container.innerHTML = formacoes.map((form, idx) => `
+                <div style="border:1px solid #ccc; border-radius:6px; padding:1rem; margin-bottom:1rem; background:#fff;">
+                    <input type="text" placeholder="Instituição de Ensino" value="${form.instituicao}" oninput="formacoes[${idx}].instituicao=this.value">
+                    <input type="text" placeholder="Curso" value="${form.curso}" oninput="formacoes[${idx}].curso=this.value">
+                     <div style="display:flex; gap:1rem;">
+                        <input type="text" placeholder="Mês/Ano Início" value="${form.inicio}" oninput="formacoes[${idx}].inicio=this.value">
+                        <input type="text" placeholder="Mês/Ano Fim" value="${form.fim}" oninput="formacoes[${idx}].fim=this.value">
+                    </div>
+                    <button type="button" class="btn no-print" style="background:#e53935;" onclick="removeFormacao(${idx})">Remover</button>
+                </div>`).join('');
+        }
+
+        document.getElementById('habilidadeInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && this.value.trim() !== '') {
+                e.preventDefault();
+                if (!habilidades.includes(this.value.trim())) {
+                    habilidades.push(this.value.trim());
+                    this.value = '';
+                    renderHabilidades();
+                }
+            }
+        });
+        function removeHabilidade(idx) {
+            habilidades.splice(idx, 1);
+            renderHabilidades();
+        }
+        function renderHabilidades() {
+            const container = document.getElementById('habilidades');
+            container.innerHTML = habilidades.map((h, idx) =>
+                `<span style="display:inline-block; background:var(--primary-color); color:#fff; padding:0.3rem 0.8rem; border-radius:20px; margin:0.2rem;">
+                    ${h} <button type="button" style="background:none; border:none; color:#fff; font-weight:bold; cursor:pointer; margin-left: 5px;" onclick="removeHabilidade(${idx})">&times;</button>
+                </span>`).join('');
+        }
+
+        function getFormData() {
+            const form = document.getElementById('cvForm');
+            return {
+                nome: form.nome.value,
+                email: form.email.value,
+                telefone: form.telefone.value,
+                endereco: form.endereco.value,
+                linkedin: form.linkedin.value,
+                resumo: form.resumo.value,
+                experiencias,
+                formacoes,
+                habilidades
+            };
+        }
+
+        function gerarCurriculo() {
+            const data = getFormData();
+            if (!data.nome || !data.email) {
+                alert("Por favor, preencha pelo menos o Nome e o E-mail.");
+                return;
+            }
+
+            const preview = document.getElementById('cvPreview');
+            preview.innerHTML = `
+            <div style="font-family:'Segoe UI',Arial,sans-serif; color:var(--text-color); background:var(--background-color); padding:2rem;">
+                <div style="text-align:center; border-bottom: 2px solid var(--primary-color); padding-bottom: 1rem;">
+                    <h1 style="margin:0; color: var(--primary-color); font-size: 2.5rem;">${data.nome}</h1>
+                    <p style="margin:0.5rem 0;">${data.email} | ${data.telefone} | ${data.endereco}</p>
+                    ${data.linkedin ? `<p style="margin:0.2rem 0;">LinkedIn: <a href="${data.linkedin}" target="_blank">${data.linkedin}</a></p>` : ''}
+                </div>
+                <div style="padding:1.5rem 0;">
+                    ${data.resumo ? `<h2 style="color:var(--primary-color); margin-top:0;">Resumo Profissional</h2><p style="text-align: justify;">${data.resumo}</p>` : ''}
+                    
+                    ${data.experiencias.length ? `<h2 style="color:var(--primary-color);">Experiência Profissional</h2>
+                        ${data.experiencias.map(exp => `
+                            <div style="margin-bottom:1rem;">
+                                <h3 style="margin:0;"><strong>${exp.cargo}</strong></h3>
+                                <p style="margin:0; font-style: italic;">${exp.empresa} | ${exp.inicio} - ${exp.fim}</p>
+                                <p style="margin-top: 5px;">${exp.descricao}</p>
+                            </div>`).join('')}` : ''}
+
+                    ${data.formacoes.length ? `<h2 style="color:var(--primary-color);">Formação Acadêmica</h2>
+                        ${data.formacoes.map(form => `
+                            <div style="margin-bottom:1rem;">
+                                <h3 style="margin:0;"><strong>${form.curso}</strong></h3>
+                                <p style="margin:0; font-style: italic;">${form.instituicao} | ${form.inicio} - ${form.fim}</p>
+                            </div>`).join('')}` : ''}
+
+                    ${data.habilidades.length ? `<h2 style="color:var(--primary-color);">Habilidades</h2>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${data.habilidades.map(h => `<span style="background: #eee; padding: 0.3rem 0.8rem; border-radius: 15px;">${h}</span>`).join('')}
+                        </div>` : ''}
+                </div>
+            </div>`;
+            
+            document.getElementById('cvPreviewContainer').style.display = 'block';
+            window.scrollTo({ top: document.getElementById('cvPreviewContainer').offsetTop, behavior: 'smooth' });
+        }
+
+        // --- LÓGICA DE PAGAMENTO E DOWNLOAD ---
+
+        let paymentCheckInterval = null;
 
         async function iniciarProcessoDownload() {
-            gerarCurriculo(); // Garante que o CV está atualizado
+            gerarCurriculo();
             if (!document.getElementById('cvForm').nome.value) {
                 alert("Por favor, preencha seu nome antes de continuar.");
                 return;
@@ -31,13 +342,12 @@
             document.getElementById('payment-status').innerHTML = `<p>Gerando PIX, aguarde...</p>`;
 
             try {
-                // Chama o nosso backend para criar o pagamento
-                const response = await fetch('http://localhost:3000/criar-pagamento', {
+                const response = await fetch('https://server-bakand-curriculo.onrender.com/criar-pagamento', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         email: document.getElementById('email').value,
-                        valor: 1.99
+                        valor: 3.00
                     })
                 });
 
@@ -45,13 +355,11 @@
 
                 const data = await response.json();
 
-                // Exibe o QR Code e o código Copia e Cola recebidos do backend
                 document.getElementById('qrcode').innerHTML = "";
                 new QRCode(document.getElementById("qrcode"), { text: data.qr_code, width: 220, height: 220 });
                 document.getElementById('pix-copia-e-cola').value = data.qr_code;
-                document.getElementById('payment-status').innerHTML = `<p style="font-size: 1.1rem;">Aguardando pagamento...</p><p style="color:gray; font-size: 0.8rem;">O download será liberado automaticamente após a confirmação.</p>`;
+                document.getElementById('payment-status').innerHTML = `<p style="font-size: 1.1rem;">Aguardando pagamento...</p><p style="color:gray; font-size: 0.8rem;">O download será liberado automaticamente.</p>`;
 
-                // Inicia a verificação do status do pagamento
                 iniciarVerificacao(data.payment_id);
 
             } catch (error) {
@@ -65,7 +373,9 @@
 
             paymentCheckInterval = setInterval(async () => {
                 try {
-                    const response = await fetch(`http://localhost:3000/verificar-pagamento/${paymentId}`);
+                    const response = await fetch(`https://server-bakand-curriculo.onrender.com/verificar-pagamento/${paymentId}`);
+                    if (!response.ok) return;
+                    
                     const data = await response.json();
 
                     if (data.status === 'approved') {
@@ -74,19 +384,177 @@
                         setTimeout(() => {
                             baixarPDF();
                             closeModal();
-                        }, 2000); // Espera 2 segundos para o usuário ver a mensagem
+                        }, 2000);
                     }
                 } catch (error) {
                     console.error("Erro ao verificar status:", error);
-                    clearInterval(paymentCheckInterval); // Para de verificar se der erro
+                    clearInterval(paymentCheckInterval);
                 }
             }, 5000); // Verifica a cada 5 segundos
         }
 
         function closeModal() {
-            if (paymentCheckInterval) clearInterval(paymentCheckInterval); // Para a verificação se o modal for fechado
+            if (paymentCheckInterval) clearInterval(paymentCheckInterval);
             document.getElementById('payment-modal').style.display = 'none';
         }
 
         function baixarPDF() {
+            const cvElement = document.getElementById('cvPreview');
+            const nomeArquivo = `curriculo_${getFormData().nome.replace(/ /g, '_')}.pdf`;
 
+            html2canvas(cvElement, {
+                scale: 2,
+                useCORS: true
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const ratio = canvasHeight / canvasWidth;
+                
+                const imgHeight = pdfWidth * ratio;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                }
+
+                pdf.save(nomeArquivo);
+            });
+        }
+
+        // --- FUNÇÕES DE PERSISTÊNCIA DE DADOS ---
+
+        async function saveDataToSupabase() {
+            // Verifica se o usuário preencheu o e-mail, que usaremos como identificador único
+            const email = document.getElementById('email').value;
+            if (!email) {
+                alert('Por favor, preencha seu e-mail para salvar o progresso na nuvem.');
+                return;
+            }
+
+            const saveButton = document.querySelector('button[onclick="saveDataToSupabase()"]');
+            const originalButtonText = saveButton.innerHTML;
+            saveButton.innerHTML = 'Salvando...';
+            saveButton.disabled = true;
+
+            const data = getFormData();
+            
+            // Prepara os dados para o Supabase
+            const dataToSave = {
+                email: data.email,
+                nome: data.nome,
+                telefone: data.telefone,
+                endereco: data.endereco,
+                linkedin: data.linkedin,
+                resumo: data.resumo,
+                experiencias_json: data.experiencias,
+                formacoes_json: data.formacoes,
+                habilidades_json: data.habilidades,
+            };
+
+            // 'upsert' tenta atualizar um registro existente (baseado no e-mail) ou cria um novo se não existir.
+            const { error } = await _supabase.from('curriculos').upsert(dataToSave, { onConflict: 'email' });
+
+            if (error) {
+                alert('Erro ao salvar o currículo: ' + error.message);
+            } else {
+                alert('Progresso salvo na nuvem com sucesso!');
+            }
+
+            saveButton.innerHTML = originalButtonText;
+            saveButton.disabled = false;
+        }
+
+        async function loadDataFromSupabase(email) {
+            if (!email) return;
+
+            const { data, error } = await _supabase
+                .from('curriculos')
+                .select('*')
+                .eq('email', email)
+                .single(); // .single() pega apenas um resultado ou retorna erro se houver mais de um
+
+            if (error && error.code !== 'PGRST116') { // PGRST116 = "No rows found"
+                console.error('Erro ao carregar dados:', error);
+                return;
+            }
+
+            if (data) {
+                alert('Currículo encontrado! Carregando seus dados.');
+                const form = document.getElementById('cvForm');
+                form.nome.value = data.nome || '';
+                form.email.value = data.email || '';
+                form.telefone.value = data.telefone || '';
+                form.endereco.value = data.endereco || '';
+                form.linkedin.value = data.linkedin || '';
+                form.resumo.value = data.resumo || '';
+
+                experiencias = data.experiencias_json || [];
+                formacoes = data.formacoes_json || [];
+                habilidades = data.habilidades_json || [];
+
+                renderAllSections();
+            }
+        }
+
+        // Adiciona um "escutador" ao campo de e-mail. Quando o usuário sai do campo, ele tenta carregar os dados.
+        document.getElementById('email').addEventListener('blur', (event) => {
+            loadDataFromSupabase(event.target.value);
+        });
+
+        function renderAllSections() {
+            renderExperiencias();
+            renderFormacoes();
+            renderHabilidades();
+        }
+
+        async function clearData() {
+            const email = document.getElementById('email').value;
+            
+            if (!email) {
+                if (confirm('Tem certeza que deseja limpar o formulário?')) {
+                    window.location.reload();
+                }
+                return;
+            }
+
+            if (confirm('Tem certeza que deseja apagar todos os dados? Isso também removerá o currículo salvo na nuvem para este e-mail.')) {
+                const { error } = await _supabase
+                    .from('curriculos')
+                    .delete()
+                    .eq('email', email);
+
+                if (error) {
+                    alert('Não foi possível apagar os dados da nuvem: ' + error.message + '\nO formulário será limpo mesmo assim.');
+                }
+                
+                window.location.reload();
+            }
+        }
+
+        // --- INICIALIZAÇÃO ---
+        function init() {
+            addExperiencia();
+            addFormacao();
+        }
+        init();
+    </script>
+</body>
+</html>
