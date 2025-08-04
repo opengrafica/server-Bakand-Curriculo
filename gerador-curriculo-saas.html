@@ -1,0 +1,92 @@
+    <div id="payment-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closeModal()">&times;</button>
+            <h2>Download Premium (R$ 1,99)</h2>
+            <p>Para baixar seu currículo, faça o pagamento via PIX usando os dados abaixo.</p>
+            
+            <div id="payment-details">
+                 <div id="qrcode" style="display: flex; justify-content: center; margin: 1rem 0; padding: 10px; background: white; border: 1px solid #ccc;"></div>
+                 <textarea id="pix-copia-e-cola" rows="4" readonly onclick="this.select(); document.execCommand('copy'); alert('Código PIX copiado!');"></textarea>
+             </div>
+    
+            <div id="payment-status" style="margin-top: 1.5rem;">
+                <p style="font-size: 1.1rem;">Aguardando pagamento...</p>
+                <p style="color:gray; font-size: 0.8rem;">O download será liberado automaticamente após a confirmação.</p>
+            </div>
+        </div>
+    </div>
+
+        // --- LÓGICA DE PAGAMENTO E DOWNLOAD (Baseado em index.html) ---
+
+        let paymentCheckInterval = null; // Variável para controlar a verificação
+
+        async function iniciarProcessoDownload() {
+            gerarCurriculo(); // Garante que o CV está atualizado
+            if (!document.getElementById('cvForm').nome.value) {
+                alert("Por favor, preencha seu nome antes de continuar.");
+                return;
+            }
+
+            document.getElementById('payment-modal').style.display = 'flex';
+            document.getElementById('payment-status').innerHTML = `<p>Gerando PIX, aguarde...</p>`;
+
+            try {
+                // Chama o nosso backend para criar o pagamento
+                const response = await fetch('http://localhost:3000/criar-pagamento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('email').value,
+                        valor: 1.99
+                    })
+                });
+
+                if (!response.ok) throw new Error('Falha na comunicação com o servidor.');
+
+                const data = await response.json();
+
+                // Exibe o QR Code e o código Copia e Cola recebidos do backend
+                document.getElementById('qrcode').innerHTML = "";
+                new QRCode(document.getElementById("qrcode"), { text: data.qr_code, width: 220, height: 220 });
+                document.getElementById('pix-copia-e-cola').value = data.qr_code;
+                document.getElementById('payment-status').innerHTML = `<p style="font-size: 1.1rem;">Aguardando pagamento...</p><p style="color:gray; font-size: 0.8rem;">O download será liberado automaticamente após a confirmação.</p>`;
+
+                // Inicia a verificação do status do pagamento
+                iniciarVerificacao(data.payment_id);
+
+            } catch (error) {
+                console.error("Erro no processo de pagamento:", error);
+                document.getElementById('payment-status').innerHTML = `<p style="color:red;">❌ Erro ao gerar PIX. Verifique se o servidor está rodando e tente novamente.</p>`;
+            }
+        }
+
+        function iniciarVerificacao(paymentId) {
+            if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+
+            paymentCheckInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`http://localhost:3000/verificar-pagamento/${paymentId}`);
+                    const data = await response.json();
+
+                    if (data.status === 'approved') {
+                        clearInterval(paymentCheckInterval);
+                        document.getElementById('payment-status').innerHTML = `<p style="color:green; font-size: 1.2rem;">✔️ Pagamento Aprovado!</p><p>Iniciando download...</p>`;
+                        setTimeout(() => {
+                            baixarPDF();
+                            closeModal();
+                        }, 2000); // Espera 2 segundos para o usuário ver a mensagem
+                    }
+                } catch (error) {
+                    console.error("Erro ao verificar status:", error);
+                    clearInterval(paymentCheckInterval); // Para de verificar se der erro
+                }
+            }, 5000); // Verifica a cada 5 segundos
+        }
+
+        function closeModal() {
+            if (paymentCheckInterval) clearInterval(paymentCheckInterval); // Para a verificação se o modal for fechado
+            document.getElementById('payment-modal').style.display = 'none';
+        }
+
+        function baixarPDF() {
+
